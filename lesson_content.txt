@@ -1,0 +1,433 @@
+﻿Má»¥c tiĂªu bĂ i há»c:
+Sá»­ dá»¥ng Identity Ä‘á»ƒ cáº¥u hĂ¬nh vĂ  XĂ¢y dá»±ng API Ä‘Äƒng kĂ½, Ä‘Äƒng nháº­pâ€¦
+NhĂºng API lĂªn giao diá»‡n di Ä‘á»™ng Ä‘á»ƒ thá»±c hiá»‡n chá»©c nÄƒng Ä‘Äƒng kĂ½ Ä‘Äƒng nháº­p
+DĂ¹ng JWT_decode Ä‘á»ƒ thá»±c hiá»‡n viá»‡c giáº£i mĂ£ token gá»­i vá» tá»« server Ä‘á»ƒ xĂ¡c Ä‘á»‹nh ngÆ°á»i dĂ¹ng, vai trĂ² ngÆ°á»i dĂ¹ng (quyá»n), thá»i gian hiá»‡u lá»±c cá»§a token
+DĂ¹ng flutter_dotenv Ä‘á»ƒ quáº£n lĂ½, tĂ¡ch biá»‡t cĂ¡c Ä‘áº§u API khá»i mĂ£ nguá»“n tá»« Ä‘Ă³ giĂºp quáº£n lĂ½ cĂ¡c API hiá»‡u quáº£ vĂ  dá»… dĂ ng hÆ¡n (dá»… dĂ ng cáº­p nháº­t Ä‘Æ°á»ng dáº«n API)
+DĂ¹ng shared_preferences Ä‘á»ƒ lÆ°u trá»¯ thĂ´ng tin vĂ o mĂ¡y (trong bĂ i hÆ°á»›ng dáº«n lÆ°u token vĂ o mĂ¡y vĂ  sá»­ dá»¥ng token Ä‘Ă³ Ä‘á»ƒ á»©ng dá»¥ng tá»± Ä‘á»™ng Ä‘Äƒng nháº­p láº¡i)
+Táº¡o vĂ  phĂ¢n quyá»n  ngÆ°á»i dĂ¹ng trong á»©ng dá»¥ng
+ÄÄƒng nháº­p tÆ°Æ¡ng á»©ng vá»›i tá»«ng quyá»n cá»§a ngÆ°á»i dĂ¹ng
+Tiáº¿p tá»¥c bĂ i tuáº§n trÆ°á»›c
+BÆ°á»›c 1. Táº¡o class User trong thÆ° má»¥c Model
+
+public class User: IdentityUser
+{
+    public string? Initials { get; set; }
+    //User = IdentityUser + string Inititals
+}
+BÆ°á»›c 2: Cáº­p nháº­t ApplicationDbContext
+public class ApplicationDbContext : IdentityDbContext&lt;User&gt;
+Â  Â  {
+Â  Â  Â  Â  public ApplicationDbContext(DbContextOptions&lt;ApplicationDbContext&gt; options) : base(options) { }
+Â  Â  Â  Â  public DbSet&lt;Product&gt; Products { get; set; }
+Â  Â  Â  Â  protected override void OnModelCreating(ModelBuilder builder)
+Â  Â  Â  Â  {
+Â  Â  Â  Â  Â  Â  base.OnModelCreating(builder);
+Â  Â  Â  Â  Â  Â  builder.Entity&lt;User&gt;().Property(u=&gt;u.Initials).HasMaxLength(5);
+Â  Â  Â  Â  Â  Â  builder.HasDefaultSchema("identity");
+Â  Â  Â  Â  }
+
+Â  Â  }
+
+
+BÆ°á»›c 3. CĂ i Ä‘áº·t thĂªm cĂ¡c gĂ³i cáº§n thiáº¿t
+â€˜Microsoft.AspNetCore.Identity.EntityFrameworkCoreâ€™ PhiĂªn báº£n 8.0.3. ÄĂ¢y lĂ  gĂ³i giĂºp thá»±c hiá»‡n cĂ¡c thao tĂ¡c: Ä‘Äƒng kĂ½, Ä‘Äƒng nháº­p, cáº­p nháº­t thĂ´ng tin User, phĂ¢n quyá»n, mĂ£ hĂ³a máº­t kháº©uâ€¦.
+â€˜Microsoft.AspNetCore.Authentication.JwtBearerâ€™ PhiĂªn báº£n 8.0.3. ÄĂ¢y lĂ  gĂ³i giĂºp thá»±c táº¡o cĂ¡c middleware, token chá»©a cĂ¡c thĂ´ng tin vá» tĂ i khoáº£n, quyá»nâ€¦
+BÆ°á»›c 4. Cáº¥u hĂ¬nh file Program.cs
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Sang6_WebAPI.Models;
+using Sang6_WebAPI.Repositories;
+using System.Text;
+
+var builder = WebApplication.CreateBuilder(args);
+//Cáº¥u hĂ¬nh: DĂ¹ng SQL Server lĂ m há»‡ quáº£n trá»‹ csdl cho á»©ng dá»¥ng
+builder.Services.AddDbContext&lt;ApplicationDbContext&gt;(options =&gt; options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
+// Add services to the container.
+
+builder.Services.AddControllers(); 
+builder.Services.AddScoped&lt;IProductRepository, ProductRepository&gt;();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
+    
+    
+// Configure CORS: Cross-Origin Resource Sharing, Ä‘Æ°á»£c dá»‹ch lĂ  â€œChia sáº» tĂ i nguyĂªn giá»¯a cĂ¡c nguá»“n gá»‘c khĂ¡c nhau
+builder.Services.AddCors(options =&gt;
+{
+    options.AddPolicy(name: "MyAllowOrigins", policy =&gt;
+    {
+        //Thay báº±ng Ä‘á»‹a chá»‰ localhost khi khá»Ÿi cháº¡y bĂªn frontend (VSCode)
+        policy.WithOrigins("http://127.0.0.1:5500", "http://localhost:5500")
+        .AllowAnyHeader()
+        .AllowAnyMethod();
+    });
+});
+
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+
+// Middleware for production error handling
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/error"); // Custom error handling endpoint
+    app.UseHsts(); // Enforce HTTPS in production
+}
+else
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+// Ăp dá»¥ng CORS cho cĂ¡c yĂªu cáº§u Ä‘áº¿n API
+app.UseCors("MyAllowOrigins");
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapIdentityApi&lt;User&gt;();
+
+app.MapControllers();
+
+app.Run();
+BÆ°á»›c 5. Thá»±c hiá»‡n add-migration vĂ  update-database
+
+Sau khi add-migration InitialIdentityModel
+
+Thá»±c hiá»‡n lá»‡nh update-database Ä‘á»ƒ Ă¡nh xáº¡ Identity vĂ o cÆ¡ sá»Ÿ dá»¯ liá»‡u
+TrÆ°á»›c khi Ă¡nh xáº¡
+
+Sau khi Ă¡nh xáº¡
+
+BÆ°á»›c 6. Trong thÆ° má»¥c controller, thĂªm APIController tĂªn AuthenticateController
+ 
+
+public class AuthenticateController : ControllerBase
+{
+    private readonly UserManager&lt;User&gt; _userManager;
+    private readonly RoleManager&lt;IdentityRole&gt; _roleManager;
+    private readonly IConfiguration _configuration;
+
+    public AuthenticateController(
+        UserManager&lt;User&gt; userManager,
+        RoleManager&lt;IdentityRole&gt; roleManager,
+        IConfiguration configuration)
+    {
+        _userManager = userManager;
+        _roleManager = roleManager;
+        _configuration = configuration;
+    }
+
+    [HttpPost("register")]
+    public async Task&lt;IActionResult&gt; Register([FromBody] RegistrationModel model)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userExists = await _userManager.FindByNameAsync(model.Username);
+        if (userExists != null)
+            return StatusCode(StatusCodes.Status400BadRequest, new { Status = false, Message = "User already exists" });
+
+        var user = new User
+        {
+            UserName = model.Username,
+            Email = model.Email,
+            Initials = model.Initials
+        };
+
+        var result = await _userManager.CreateAsync(user, model.Password);
+        if (!result.Succeeded)
+            return StatusCode(StatusCodes.Status500InternalServerError, new { Status = false, Message = "User creation failed" });
+
+        // Assign Role if Provided
+        if (!string.IsNullOrEmpty(model.Role))
+        {
+            if (!await _roleManager.RoleExistsAsync(model.Role))
+            {
+                await _roleManager.CreateAsync(new IdentityRole(model.Role));
+            }
+            await _userManager.AddToRoleAsync(user, model.Role);
+        }
+
+        return Ok(new { Status = true, Message = "User created successfully" });
+    }
+
+    [HttpPost("login")]
+    public async Task&lt;IActionResult&gt; Login([FromBody] LoginModel model)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var user = await _userManager.FindByNameAsync(model.Username);
+        if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+            return Unauthorized(new { Status = false, Message = "Invalid username or password" });
+
+        var userRoles = await _userManager.GetRolesAsync(user);
+
+        var authClaims = new List&lt;Claim&gt;
+    {
+        new Claim(ClaimTypes.Name, user.UserName),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+    };
+
+        foreach (var userRole in userRoles)
+        {
+            authClaims.Add(new Claim(ClaimTypes.Role, userRole));
+        }
+
+        var token = GenerateToken(authClaims);
+        return Ok(new { Status = true, Message = "Logged in successfully", Token = token });
+    }
+
+    
+    private string GenerateToken(IEnumerable&lt;Claim&gt; claims)
+    {
+        var jwtSettings = _configuration.GetSection("JWTKey");
+        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Secret"]));
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims),
+            Expires = DateTime.UtcNow.AddHours(Convert.ToDouble(jwtSettings["TokenExpiryTimeInHour"])),
+            Issuer = jwtSettings["ValidIssuer"],
+            Audience = jwtSettings["ValidAudience"],
+            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
+}
+BÆ°á»›c 7. ThĂªm cĂ¡c Class cáº§n thiáº¿t
+ChÆ°Æ¡ng trĂ¬nh Ä‘ang bĂ¡o lá»—i táº¡i LoginModel vĂ  RegistrationModel, trong thÆ° má»¥c Model thĂªm hai class cĂ³ tĂªn trĂªn
+
+public class LoginModel
+{
+    [Required]
+    public string Username { get; set; } = string.Empty;
+    [Required]
+    public string Password { get; set; } = string.Empty;
+}
+
+public class RegistrationModel
+{
+    [Required]
+    public string Username { get; set; } = string.Empty;
+    [Required, EmailAddress]
+    public string Email { get; set; } = string.Empty;
+    [Required, MinLength(6)]
+    public string Password { get; set; } = string.Empty;
+    public string? Initials { get; set; }
+    public string? Role { get; set; } // Optional - assign a role if needed
+}
+   
+BÆ°á»›c 8. Cáº­p nháº­t Programe.cs (Nhá»› kiá»ƒm tra Ä‘Ă£ cĂ i Ä‘áº·t gĂ³i JwtBearer chÆ°a ???
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Sang6_WebAPI.Models;
+using Sang6_WebAPI.Repositories;
+using System.Text;
+
+var builder = WebApplication.CreateBuilder(args);
+//Cáº¥u hĂ¬nh: DĂ¹ng SQL Server lĂ m há»‡ quáº£n trá»‹ csdl cho á»©ng dá»¥ng
+builder.Services.AddDbContext&lt;ApplicationDbContext&gt;(options =&gt; options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Register identity
+builder.Services.AddIdentity&lt;User, IdentityRole&gt;()
+    .AddEntityFrameworkStores&lt;ApplicationDbContext&gt;()
+    .AddDefaultTokenProviders();
+
+// Add services to the container.
+
+builder.Services.AddControllers(); 
+builder.Services.AddScoped&lt;IProductRepository, ProductRepository&gt;();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
+    
+    
+// Configure CORS: Cross-Origin Resource Sharing, Ä‘Æ°á»£c dá»‹ch lĂ  â€œChia sáº» tĂ i nguyĂªn giá»¯a cĂ¡c nguá»“n gá»‘c khĂ¡c nhau
+builder.Services.AddCors(options =&gt;
+{
+    options.AddPolicy(name: "MyAllowOrigins", policy =&gt;
+    {
+        //Thay báº±ng Ä‘á»‹a chá»‰ localhost khi khá»Ÿi cháº¡y bĂªn frontend (VSCode)
+        policy.WithOrigins("http://127.0.0.1:5500", "http://localhost:5500")
+        .AllowAnyHeader()
+        .AllowAnyMethod();
+    });
+});
+
+//Configure JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("JWTKey");
+var key = Encoding.UTF8.GetBytes(jwtSettings["Secret"]);
+
+builder.Services.AddAuthentication(options =&gt;
+{
+    options.DefaultAuthenticateScheme = "Bearer";
+    options.DefaultChallengeScheme = "Bearer";
+})
+.AddJwtBearer("Bearer", options =&gt;
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["ValidIssuer"],
+        ValidAudience = jwtSettings["ValidAudience"],
+        IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+});
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+//Táº¡o ra cĂ¡c Role trong á»©ng dá»¥ng Ä‘á»ƒ sau nĂ y thá»±c hiá»‡n phĂ¢n quyá»n
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService&lt;RoleManager&lt;IdentityRole&gt;&gt;();
+    var roles = new[] { "Admin", "User" };
+    foreach (var role in roles)
+    {
+        if (!await roleManager.RoleExistsAsync(role))
+        {
+            await roleManager.CreateAsync(new IdentityRole(role));
+        }
+    }
+}
+
+// Middleware for production error handling
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/error"); // Custom error handling endpoint
+    app.UseHsts(); // Enforce HTTPS in production
+}
+else
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+// Ăp dá»¥ng CORS cho cĂ¡c yĂªu cáº§u Ä‘áº¿n API
+app.UseCors("MyAllowOrigins");
+app.UseAuthentication();
+app.UseAuthorization();
+
+//NgÆ°á»i dĂ¹ng Ä‘Ă£ tá»± config Identity user nĂªn bá» pháº§n nĂ y
+//app.MapIdentityApi&lt;User&gt;();
+
+app.MapControllers();
+
+app.Run();
+BÆ°á»›c 9. Cáº­p nháº­t láº¡i file appsetting.json
+{
+  
+  //Cáº¥u hĂ¬nh thĂ´ng tin khĂ³a mĂ£ hĂ³a JWT
+  "JWTKey": {, 
+    "Secret": "AReallyLongSecretKeyForYourJWTTokenSigning!", //KhĂ³a bĂ­ máº­t Ä‘á»ƒ khĂ³a vĂ  giáº£i khĂ³a token
+    "ValidIssuer": "YourIssuer", //ThĂ´ng tin ngÆ°á»i phĂ¡t hĂ nh
+    "ValidAudience": "YourAudience",//á»¨ng dá»¥ng nháº­n Ä‘Æ°á»£c token nĂ y
+    "TokenExpiryTimeInHour": "1"//Thá»i gian hiá»‡u lá»±c cá»§a token
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=MY-PC\\MRHUNG189;Database=testAPI;Trusted_Connection=True;TrustServerCertificate=True"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+BÆ°á»›c 10. Debug chÆ°Æ¡ng trĂ¬nh vĂ  Ä‘Äƒng kĂ½ tĂ i khoáº£n, Ä‘Äƒng nháº­p
+
+Tiáº¿n hĂ nh Ä‘Äƒng kĂ½ vĂ  Ä‘Äƒng nháº­p thá»­
+{
+  "username": "manhhung3",
+  "email": "manhhung3@gmail.com",
+  "password": "Manhhung@123",
+  "initials": "hung3",
+  "role": "User"
+}
+ÄÄƒng kĂ½ thĂ nh cĂ´ng
+
+ÄÄƒng nháº­p thĂ nh cĂ´ng
+
+BÆ°á»›c 11. Giáº£i mĂ£ token Ä‘á»ƒ láº¥y thĂ´ng tin tá»« token
+Tiáº¿n hĂ nh decode JWT xem mĂ£ token tráº£ vá» gá»“m nhá»¯ng gĂ¬ báº±ng cĂ¡ch vĂ o trang https://jwt.io/ Ä‘á»ƒ kiá»ƒm tra thá»­ Ä‘oáº¡n mĂ£ token nháº­n trĂªn
+
+ThĂ´ng tin nháº­n vá» khi Ä‘Äƒng nháº­p thĂ nh cĂ´ng lĂ  má»™t token vĂ  bĂªn trong bao gá»“m cĂ¡c thĂ´ng tin nhÆ°: tĂªn Ä‘Äƒng nháº­p, ID cá»§a token, thá»i gian báº¯t Ä‘áº§u cá»§a token, thá»i gian háº¿t háº¡nâ€¦.
+Qua bĂªn android studio Ä‘á»ƒ tiáº¿n hĂ nh gáº¯n cĂ¡c API vĂ o trong giao diá»‡n
+BÆ°á»›c 1. CĂ i Ä‘áº·t jwt_decoder Ä‘á»ƒ giáº£i mĂ£ káº¿t quáº£ token tráº£ vá»
+flutter pub add jwt_decoder
+BÆ°á»›c 2. 
+Nháº­n tháº¥y má»™t á»©ng dá»¥ng sáº½ cĂ³ ráº¥t nhiá»u Ä‘Æ°á»ng link dáº«n tá»›i cĂ¡c API khĂ¡c nhau nĂªn viá»‡c cáº¥u hĂ¬nh Ä‘Æ°á»ng dáº«n Ä‘áº¿n API cho tá»«ng giao diá»‡n ráº¥t phá»©c táº¡p vĂ  máº¥t thá»i gian  táº¡o ra class Ä‘á»ƒ quáº£n lĂ½ viá»‡c truy cáº­p cĂ¡c API cho dá»… dĂ ng (Ä‘Ă¢y khĂ´ng pháº£i lĂ  phÆ°Æ¡ng phĂ¡p báº£o máº­t tá»‘t nháº¥t)
+CĂ i Ä‘áº·t flutter_dotenv: flutter pub add flutter_dotenv
+trong thÆ° má»¥c lib táº¡o thÆ° má»¥c config vĂ  file config_url.dart 
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';class Config_URL {  static String get baseUrl {    final url = dotenv.env['BASE_URL'];    if (url == null) {      print("BASE_URL is not set in the .env file. Using default URL.");      //Ä‘Æ°á»ng dáº«n API náº¿u khĂ´ng Ä‘á»c Ä‘Æ°á»£c URL trong file .env      return "https://longashgrape36.conveyor.cloud/api/";    }    return url;  }}
+táº¡o file .env (Ä‘á»“ng cáº¥p vá»›i thÆ° má»¥c lib)vĂ  khai bĂ¡o trong pubspec.yaml
+
+Ná»™i dung file .env
+//khai bĂ¡o cĂ¡c Ä‘Æ°á»ng dáº«n tá»›i API, database...//khĂ´ng upload file nĂ y lĂªn githubBASE_URL=https://littlegoldbike52.conveyor.cloud/api/
+Khai bĂ¡o trong pubspec.yaml
+
+BÆ°á»›c 3. 
+Táº¡o file auth_service.dart trong thÆ° má»¥c services
+Cáº¥u trĂºc thÆ° má»¥c lib vĂ  file .env trong chÆ°Æ¡ng trĂ¬nh
+
+class AuthService {  // Ä‘Æ°á»ng dáº«n tá»›i API login  String get apiUrl =&gt; "${Config_URL.baseUrl}Authenticate/login";  Future&lt;Map&lt;String, dynamic&gt;&gt; login(String username, String password) async {    try {      final response = await http.post(        Uri.parse(apiUrl),        headers: {"Content-Type": "application/json"},        //Láº¥y thĂ´ng tin tĂªn Ä‘Äƒng nháº­p vĂ  password        body: jsonEncode({          "username": username,          "password": password,        }),      );      if (response.statusCode == 200) {        final data = jsonDecode(response.body);        bool status = data['status'];        if (!status) {          return {"success": false, "message": data['message']};        }        //láº¥y token tráº£ vá»        String token = data['token'];        // Decode token Ä‘á»ƒ láº¥y cĂ¡c thĂ´ng tin Ä‘Äƒng nháº­p: tĂªn Ä‘Äƒng nháº­p, role...        Map&lt;String, dynamic&gt; decodedToken = JwtDecoder.decode(token);        // LÆ°u token vĂ o SharedPreferences        SharedPreferences prefs = await SharedPreferences.getInstance();        prefs.setString('jwt_token', token);  // LÆ°u token        return {          "success": true,          "token": token,          "decodedToken": decodedToken,        };      } else {        // If status code is not 200, treat it as login failure        return {"success": false, "message": "Failed to login: ${response.statusCode}"};      }    } catch (e) {      // Handle network or parsing errors      return {"success": false, "message": "Network error: $e"};    }  }}
+BÆ°á»›c 4. 
+Cáº­p nháº­t thĂªm chá»©c nÄƒng Ä‘Äƒng kĂ½ vĂ  Ä‘Äƒng nháº­p trong auth.dart
+class Auth {  static final AuthService _authService = AuthService();  static final ApiClient _apiClient = ApiClient();  // ÄÄƒng nháº­p  static Future&lt;Map&lt;String, dynamic&gt;&gt; login(String username, String password) async {    var result = await _authService.login(username, password);    return result; // returns a map with {success: bool, token: string?, role: string?, message: string?}  }  // ÄÄƒng kĂ½ tĂ i khoáº£n má»›i  static Future&lt;Map&lt;String, dynamic&gt;&gt; register({    required String username,    required String email,    required String password,    required String initials,    required String role,  }) async {    // Táº¡o body Ä‘á»ƒ gá»­i lĂªn API    Map&lt;String, dynamic&gt; body = {      "username": username,      "email": email,      "password": password,      "initials": initials,      "role": role,    };    // Gá»i API Ä‘Äƒng kĂ½ thĂ´ng qua ApiClient    try {      var response = await _apiClient.post('Authenticate/register', body: body);      // Xá»­ lĂ½ káº¿t quáº£ tá»« API      if (response.statusCode == 200) {        // Chuyá»ƒn Ä‘á»•i body JSON tá»« API thĂ nh Map        var result = jsonDecode(response.body);        return result;      } else {        return {          'success': false,          'message': 'ÄÄƒng kĂ½ tháº¥t báº¡i, vui lĂ²ng thá»­ láº¡i.'        };      }    } catch (e) {      return {        'success': false,        'message': 'Lá»—i káº¿t ná»‘i: ${e.toString()}'      };    }  }}
+
+BÆ°á»›c 5. 
+Táº¡o class api_client trong thÆ° má»¥c services gá»i cĂ¡c giao thá»©c cá»§a API (Get/Post/Put/Delete)
+class ApiClient {  final String baseUrl;  ApiClient({String? baseUrl})      : baseUrl = baseUrl ?? Config_URL.baseUrl;  Future&lt;http.Response&gt; get(String endpoint, {Map&lt;String, String&gt;? headers}) {    return http.get(      Uri.parse('$baseUrl$endpoint'),      headers: _buildHeaders(headers),    );  }  Future&lt;http.Response&gt; post(String endpoint, {Map&lt;String, String&gt;? headers, dynamic body}) {    return http.post(      Uri.parse('$baseUrl$endpoint'),      headers: _buildHeaders(headers),      body: jsonEncode(body),    );  }  // CĂ¡c phÆ°Æ¡ng thá»©c PUT, DELETE náº¿u cáº§n  Future&lt;http.Response&gt; put(String endpoint, {Map&lt;String, String&gt;? headers, dynamic body}) {    return http.put(      Uri.parse('$baseUrl$endpoint'),      headers: _buildHeaders(headers),      body: jsonEncode(body),    );  }  Future&lt;http.Response&gt; delete(String endpoint, {Map&lt;String, String&gt;? headers}) {    return http.delete(      Uri.parse('$baseUrl$endpoint'),      headers: _buildHeaders(headers),    );  }  Map&lt;String, String&gt; _buildHeaders(Map&lt;String, String&gt;? headers) {    return {      'Content-Type': 'application/json',      if (headers != null) ...headers,    };  }}
+BÆ°á»›c 6. 
+Cáº­p nháº­t giao diá»‡n Ä‘Äƒng nháº­p login_screen.dart
+LÆ°u thĂ´ng tin Ä‘Äƒng nháº­p (Token) vĂ o á»©ng dá»¥ng Ä‘á»ƒ láº§n sau Ä‘Äƒng nháº­p náº¿u token cĂ²n háº¡n thĂ¬ khĂ´ng cáº§n pháº£i Ä‘Äƒng nháº­p láº¡i báº±ng cĂ¡ch dĂ¹ng shared_preferences  
+Cháº¡y cĂ¢u lá»‡nh trong terminal: flutter pub add shared_preferences
+import 'package:flutter/material.dart';import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferencesimport 'package:fb_interface/utils/auth.dart';import 'package:fb_interface/screens/admin_screen.dart';import 'package:fb_interface/screens/main_screen.dart';import 'package:fb_interface/screens/registration_screen.dart';class LoginScreen extends StatefulWidget {  const LoginScreen({super.key});  @override  _LoginScreenState createState() =&gt; _LoginScreenState();}class _LoginScreenState extends State&lt;LoginScreen&gt; {  final TextEditingController _usernameController = TextEditingController();  final TextEditingController _passwordController = TextEditingController();  bool _isLoading = false;  bool _obscurePassword = true;  @override  void initState() {    super.initState();    _checkToken(); // Kiá»ƒm tra token khi má»Ÿ mĂ n hĂ¬nh  }  // Kiá»ƒm tra token trong SharedPreferences  Future&lt;void&gt; _checkToken() async {    SharedPreferences prefs = await SharedPreferences.getInstance();    String? token = prefs.getString('jwt_token');    if (token != null) {      // Náº¿u token tá»“n táº¡i, chuyá»ƒn hÆ°á»›ng Ä‘áº¿n MainScreen      Navigator.pushReplacement(        context,        MaterialPageRoute(builder: (context) =&gt; const MainScreen()),      );    }  }  // HĂ m xá»­ lĂ½ Ä‘Äƒng nháº­p  Future&lt;void&gt; _handleLogin() async {    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {      ScaffoldMessenger.of(context).showSnackBar(        const SnackBar(          content: Text('Vui lĂ²ng nháº­p Ä‘áº§y Ä‘á»§ thĂ´ng tin'),          backgroundColor: Colors.red,        ),      );      return;    }    setState(() =&gt; _isLoading = true);    // Gá»i Auth.login Ä‘á»ƒ xá»­ lĂ½ Ä‘Äƒng nháº­p    Map&lt;String, dynamic&gt; result = await Auth.login(      _usernameController.text,      _passwordController.text,    );    setState(() =&gt; _isLoading = false);    if (result['success'] == true) {      // LÆ°u token vĂ o SharedPreferences      SharedPreferences prefs = await SharedPreferences.getInstance();      await prefs.setString('jwt_token', result['token']); // LÆ°u token      String role = result['role'] ?? 'User'; // Láº¥y vai trĂ² ngÆ°á»i dĂ¹ng      if (role == 'Admin') {        Navigator.pushReplacement(          context,          //Náº¿u ngÆ°á»i dĂ¹ng lĂ  admin thĂ¬ chuyá»ƒn Ä‘áº¿n trang admin          MaterialPageRoute(builder: (context) =&gt; const AdminScreen()),        );      } else {        Navigator.pushReplacement(          context,          //náº¿u khĂ´ng pháº£i lĂ  admin thĂ¬ chuyá»ƒn Ä‘áº¿n trang MainScreen          MaterialPageRoute(builder: (context) =&gt; const MainScreen()),        );        //cĂ³ thá»ƒ xá»­ lĂ½ thĂªm náº¿u khĂ´ng pháº£i loáº¡i ngÆ°á»i dĂ¹ng nĂ o thĂ¬ chuyá»ƒn Ä‘áº¿n trang lá»—i      }    } else {      // Hiá»ƒn thá»‹ thĂ´ng bĂ¡o lá»—i      String errorMessage = result['message'] ?? 'TĂªn Ä‘Äƒng nháº­p hoáº·c máº­t kháº©u khĂ´ng Ä‘Ăºng';      ScaffoldMessenger.of(context).showSnackBar(        SnackBar(          content: Text(errorMessage),          backgroundColor: Colors.red,        ),      );    }  }  @override  Widget build(BuildContext context) {    return Scaffold(      backgroundColor: Colors.white,      body: SafeArea(        child: SingleChildScrollView(          child: Padding(            padding: const EdgeInsets.symmetric(horizontal: 24.0),            child: Column(              children: [                const SizedBox(height: 60),                Text(                  'facebook',                  textAlign: TextAlign.center,                  style: TextStyle(                    fontSize: 40,                    fontWeight: FontWeight.bold,                    color: Colors.blue[700],                  ),                ),                const SizedBox(height: 40),                TextField(                  controller: _usernameController,                  keyboardType: TextInputType.emailAddress,                  decoration: InputDecoration(                    hintText: 'Sá»‘ Ä‘iá»‡n thoáº¡i hoáº·c email',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                  ),                ),                const SizedBox(height: 12),                TextField(                  controller: _passwordController,                  obscureText: _obscurePassword,                  decoration: InputDecoration(                    hintText: 'Máº­t kháº©u',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                    suffixIcon: IconButton(                      icon: Icon(                        _obscurePassword ? Icons.visibility_off : Icons.visibility,                        color: Colors.grey,                      ),                      onPressed: () {                        setState(() =&gt; _obscurePassword = !_obscurePassword);                      },                    ),                  ),                ),                const SizedBox(height: 20),                SizedBox(                  height: 50,                  child: ElevatedButton(                    onPressed: _isLoading ? null : _handleLogin,                    style: ElevatedButton.styleFrom(                      backgroundColor: Colors.blue[700],                      shape: RoundedRectangleBorder(                        borderRadius: BorderRadius.circular(12),                      ),                      elevation: 0,                    ),                    child: _isLoading                        ? const SizedBox(                      width: 20,                      height: 20,                      child: CircularProgressIndicator(                        strokeWidth: 2,                        valueColor: AlwaysStoppedAnimation&lt;Color&gt;(Colors.white),                      ),                    )                        : const Text(                      'ÄÄƒng nháº­p',                      style: TextStyle(                        fontSize: 16,                        fontWeight: FontWeight.bold,                      ),                    ),                  ),                ),                const SizedBox(height: 20),                // ThĂªm Ä‘iá»u hÆ°á»›ng Ä‘áº¿n mĂ n hĂ¬nh Ä‘Äƒng kĂ½                Row(                  mainAxisAlignment: MainAxisAlignment.center,                  children: [                    const Text("ChÆ°a cĂ³ tĂ i khoáº£n? "),                    TextButton(                      onPressed: () {                        Navigator.push(                          context,                          MaterialPageRoute(builder: (context) =&gt; const RegistrationScreen()),                        );                      },                      child: const Text(                        'ÄÄƒng kĂ½ ngay',                        style: TextStyle(color: Colors.blue),                      ),                    ),                  ],                ),              ],            ),          ),        ),      ),    );  }}
+BÆ°á»›c 7. 
+Táº¡o giao diá»‡n admin Ä‘á»ƒ khi ngÆ°á»i dĂ¹ng Ä‘Äƒng nháº­p vá»›i role=Admin thĂ¬ vĂ o trang nĂ y
+import 'package:flutter/material.dart';class AdminScreen extends StatelessWidget {  const AdminScreen({super.key});  @override  Widget build(BuildContext context) {    return Scaffold(      appBar: AppBar(        title: const Text("Admin Dashboard"),        actions: [          IconButton(            icon: const Icon(Icons.logout),            onPressed: () {              // Implement logout logic here if needed.              // For example, navigate back to the login screen or              // clear stored credentials.              Navigator.popUntil(context, (route) =&gt; route.isFirst);            },          ),        ],      ),      body: Center(        child: Text(          'Welcome, Admin!',          style: Theme.of(context).textTheme.headlineMedium,        ),      ),    );  }}
+BÆ°á»›c 8. Táº¡o giao diá»‡n Ä‘Äƒng kĂ½
+5461001016000
+Giao diá»‡n Ä‘Äƒng kĂ½: 
+import 'package:flutter/material.dart';import 'package:fb_interface/utils/auth.dart';  class RegistrationScreen extends StatefulWidget {  const RegistrationScreen({super.key});  @override  _RegistrationScreenState createState() =&gt; _RegistrationScreenState();}class _RegistrationScreenState extends State&lt;RegistrationScreen&gt; {  final TextEditingController _usernameController = TextEditingController();  final TextEditingController _emailController = TextEditingController();  final TextEditingController _passwordController = TextEditingController();  final TextEditingController _initialsController = TextEditingController();  final TextEditingController _roleController = TextEditingController();  bool _isLoading = false;  bool _obscurePassword = true;  Future&lt;void&gt; _handleRegister() async {    // Kiá»ƒm tra cĂ¡c trÆ°á»ng nháº­p liá»‡u    if (_usernameController.text.isEmpty ||        _emailController.text.isEmpty ||        _passwordController.text.isEmpty ||        _initialsController.text.isEmpty ||        _roleController.text.isEmpty) {      ScaffoldMessenger.of(context).showSnackBar(        const SnackBar(          content: Text('Vui lĂ²ng nháº­p Ä‘áº§y Ä‘á»§ thĂ´ng tin'),          backgroundColor: Colors.red,        ),      );      return;    }    setState(() =&gt; _isLoading = true);    // Gá»i phÆ°Æ¡ng thá»©c register tá»« Auth class    Map&lt;String, dynamic&gt; result = await Auth.register(      username: _usernameController.text,      email: _emailController.text,      password: _passwordController.text,      initials: _initialsController.text,      role: _roleController.text,    );    setState(() =&gt; _isLoading = false);    // Xá»­ lĂ½ káº¿t quáº£ tráº£ vá» tá»« API    if (result['success'] == true) {      ScaffoldMessenger.of(context).showSnackBar(        const SnackBar(          content: Text('ÄÄƒng kĂ½ thĂ nh cĂ´ng!'),          backgroundColor: Colors.green,        ),      );      // Sau khi Ä‘Äƒng kĂ½ thĂ nh cĂ´ng, quay láº¡i trang Ä‘Äƒng nháº­p      Navigator.pop(context);    } else {      String errorMessage = result['message'] ?? 'ÄÄƒng kĂ½ tháº¥t báº¡i';      ScaffoldMessenger.of(context).showSnackBar(        SnackBar(          content: Text(errorMessage),          backgroundColor: Colors.red,        ),      );    }  }  @override  Widget build(BuildContext context) {    return Scaffold(      backgroundColor: Colors.white,      body: SafeArea(        child: SingleChildScrollView(          child: Padding(            padding: const EdgeInsets.symmetric(horizontal: 24.0),            child: Column(              crossAxisAlignment: CrossAxisAlignment.start,              children: [                const SizedBox(height: 60),                Text(                  'ÄÄƒng kĂ½ tĂ i khoáº£n',                  textAlign: TextAlign.center,                  style: TextStyle(                    fontSize: 30,                    fontWeight: FontWeight.bold,                    color: Colors.blue[700],                  ),                ),                const SizedBox(height: 40),                TextField(                  controller: _usernameController,                  keyboardType: TextInputType.text,                  decoration: InputDecoration(                    hintText: 'TĂªn ngÆ°á»i dĂ¹ng',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                  ),                ),                const SizedBox(height: 12),                TextField(                  controller: _emailController,                  keyboardType: TextInputType.emailAddress,                  decoration: InputDecoration(                    hintText: 'Email',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                  ),                ),                const SizedBox(height: 12),                TextField(                  controller: _passwordController,                  obscureText: _obscurePassword,                  decoration: InputDecoration(                    hintText: 'Máº­t kháº©u',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                    suffixIcon: IconButton(                      icon: Icon(                        _obscurePassword ? Icons.visibility_off : Icons.visibility,                        color: Colors.grey,                      ),                      onPressed: () {                        setState(() =&gt; _obscurePassword = !_obscurePassword);                      },                    ),                  ),                ),                const SizedBox(height: 12),                TextField(                  controller: _initialsController,                  keyboardType: TextInputType.text,                  decoration: InputDecoration(                    hintText: 'KĂ½ tá»± viáº¿t táº¯t',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                  ),                ),                const SizedBox(height: 12),                TextField(                  controller: _roleController,                  keyboardType: TextInputType.text,                  decoration: InputDecoration(                    hintText: 'Vai trĂ² (Admin/User)',                    filled: true,                    fillColor: Colors.grey[100],                    border: OutlineInputBorder(                      borderRadius: BorderRadius.circular(12),                      borderSide: BorderSide.none,                    ),                    contentPadding: const EdgeInsets.symmetric(                      horizontal: 16,                      vertical: 16,                    ),                  ),                ),                const SizedBox(height: 20),                SizedBox(                  height: 50,                  child: ElevatedButton(                    onPressed: _isLoading ? null : _handleRegister,                    style: ElevatedButton.styleFrom(                      backgroundColor: Colors.blue[700],                      shape: RoundedRectangleBorder(                        borderRadius: BorderRadius.circular(12),                      ),                      elevation: 0,                    ),                    child: _isLoading                        ? const SizedBox(                      width: 20,                      height: 20,                      child: CircularProgressIndicator(                        strokeWidth: 2,                        valueColor: AlwaysStoppedAnimation&lt;Color&gt;(Colors.white),                      ),                    )                        : const Text(                      'ÄÄƒng kĂ½',                      style: TextStyle(                        fontSize: 16,                        fontWeight: FontWeight.bold,                      ),                    ),                  ),                ),                const SizedBox(height: 20),                Row(                  mainAxisAlignment: MainAxisAlignment.center,                  children: [                    const Text("ÄĂ£ cĂ³ tĂ i khoáº£n? "),                    TextButton(                      onPressed: () {                        Navigator.pop(context); // Quay láº¡i mĂ n hĂ¬nh Ä‘Äƒng nháº­p                      },                      child: const Text(                        'ÄÄƒng nháº­p',                        style: TextStyle(color: Colors.blue),                      ),                    ),                  ],                ),              ],            ),          ),        ),      ),    );  }}
+BÆ°á»›c 9. cáº­p nháº­t láº¡i hĂ m main
+Future&lt;void&gt; main() async {  await dotenv.load(fileName: ".env");  runApp(const MyApp());}
+Káº¿t quáº£ chÆ°Æ¡ng trĂ¬nh
+1943812268006Giao diá»‡n Ä‘Äƒng nháº­p
+Giao diá»‡n Ä‘Äƒng kĂ½
+168530825763300
+ÄÄƒng kĂ½ thĂ nh cĂ´ng
+2081530000
+2858711241898001119248245253ÄÄƒng nháº­p thĂ nh cĂ´ng vĂ o trang HomeScreen + MarketScreenâ€¦
+
+ThoĂ¡t á»©ng dá»¥ng ra chÆ°Æ¡ng trĂ¬nh tá»± Ä‘Äƒng nháº­p láº¡i (ÄĂ£ lÆ°u token trong á»©ng dá»¥ng vĂ  token cĂ²n thá»i háº¡n Ä‘á»ƒ Ä‘Äƒng nháº­p)
+BĂ i táº­p vá» nhĂ  (cĂ¡ nhĂ¢n â€“ láº¥y Ä‘iá»ƒm kiá»ƒm tra táº¡i lá»›p) tuáº§n sau tháº§y HĂ¹ng cháº¥m
+ThĂªm chá»©c nÄƒng Ä‘Äƒng xuáº¥t (xĂ³a token khá»i SharePreference lĂ  xong)
+Lá»—i khi Ä‘Äƒng nháº­p (TĂ i khoáº£n Admin váº«n Ä‘ang vĂ o giao diá»‡n User), tĂ i khoáº£n nĂ o cho vĂ o Ä‘Ăºng giao diá»‡n Ä‘Ă³ (code láº¡i trĂªn giao diá»‡n LoginScreen)
+ÄÄƒng nháº­p thĂ nh cĂ´ng admin nhÆ°ng khi thoĂ¡t á»©ng dá»¥ng vĂ  vĂ o láº¡i thĂ¬ chÆ°Æ¡ng trĂ¬nh vĂ o nháº§m trang cá»§a User (MainScreen), cáº§n chá»‰nh sá»­a láº¡i cho Ä‘Ăºng
+PhĂ¢n quyá»n cho chá»©c nÄƒng láº¥y danh sĂ¡ch sáº£n pháº©m
+TĂ­ch há»£p smarth_auth vĂ o (láº¥y Ä‘iá»ƒm cá»™ng hoáº·c gá»¡ láº¡i má»™t cá»™t Ä‘iá»ƒm nĂ o Ä‘Ă³ bá»‹ váº¯ng/tháº¥p)
+Má»—i sáº£n pháº©m thuá»™c 1 danh má»¥c sáº£n pháº©m (ThĂªm thuá»™c tĂ­nh danh má»¥c trong class Product)
+Admin cĂ³ quyá»n: ThĂªm/ xĂ³a/ sá»­a danh má»¥c sáº£n pháº©m
+XĂ³a danh má»¥c sáº£n pháº©m thĂ¬ cĂ¡c sáº£n pháº©m sáº½ khĂ´ng thuá»™c danh má»¥c nĂ o cáº£
+https://pub.dev/packages/smart_auth

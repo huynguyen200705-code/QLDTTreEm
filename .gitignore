@@ -1,0 +1,20 @@
+## Build results
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio & VS Code cache/user files
+.vs/
+.vscode/
+*.user
+*.userprefs
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Temporary / scratch files
+temp_doc.docx
+temp_doc.zip
+doc_extracted/
+doc_content.txt
+doc_paragraphs.txt
+doc_text.txt
