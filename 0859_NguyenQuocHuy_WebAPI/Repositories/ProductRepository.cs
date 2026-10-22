@@ -1,46 +1,58 @@
-﻿using _0859_NguyenQuocHuy_WebAPI.Models;
+using _0859_NguyenQuocHuy_WebAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace _0859_NguyenQuocHuy_WebAPI.Repositories;
 
+/// <summary>
+/// Triển khai các phương thức truy vấn và cập nhật dữ liệu Sản phẩm
+/// </summary>
 public class ProductRepository : IproductRepository
 {
-    private readonly ApplicationDbContext _context;
+    private readonly ApplicationDbContext _dbContext;
 
-    public ProductRepository(ApplicationDbContext context)
+    public ProductRepository(ApplicationDbContext dbContext)
     {
-        _context = context;
+        _dbContext = dbContext;
     }
 
     public async Task<IEnumerable<Product>> GetProductsAsync()
     {
-        return await _context.Products.Include(p => p.Category).ToListAsync();
+        return await _dbContext.Products
+            .AsNoTracking()
+            .Include(item => item.Category)
+            .ToListAsync();
     }
 
     public async Task<Product?> GetProductByIdAsync(int id)
     {
-        return await _context.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id);
+        return await _dbContext.Products
+            .AsNoTracking()
+            .Include(item => item.Category)
+            .SingleOrDefaultAsync(item => item.Id == id);
     }
 
     public async Task AddProductAsync(Product product)
     {
-        _context.Products.Add(product);
-        await _context.SaveChangesAsync();
+        ArgumentNullException.ThrowIfNull(product);
+        await _dbContext.Products.AddAsync(product);
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task UpdateProductAsync(Product product)
     {
-        _context.Entry(product).State = EntityState.Modified;
-        await _context.SaveChangesAsync();
+        ArgumentNullException.ThrowIfNull(product);
+        _dbContext.Products.Update(product);
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task DeleteProductAsync(int id)
     {
-        var product = await _context.Products.FindAsync(id);
-        if (product != null)
+        var targetProduct = await _dbContext.Products.FindAsync(id);
+        if (targetProduct is not null)
         {
-            _context.Products.Remove(product);
-            await _context.SaveChangesAsync();
+            _dbContext.Products.Remove(targetProduct);
+            await _dbContext.SaveChangesAsync();
         }
     }
 }
+

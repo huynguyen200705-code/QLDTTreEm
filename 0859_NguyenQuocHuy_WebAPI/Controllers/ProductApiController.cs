@@ -1,4 +1,4 @@
-﻿using _0859_NguyenQuocHuy_WebAPI.Models;
+using _0859_NguyenQuocHuy_WebAPI.Models;
 using _0859_NguyenQuocHuy_WebAPI.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,93 +9,136 @@ namespace _0859_NguyenQuocHuy_WebAPI.Controllers;
 [ApiController]
 public class ProductApiController : ControllerBase
 {
-    private readonly IproductRepository _productRepository;
+    private readonly IproductRepository _productRepo;
+    private readonly ILogger<ProductApiController> _logger;
 
-    public ProductApiController(IproductRepository productRepository)
+    public ProductApiController(
+        IproductRepository productRepo,
+        ILogger<ProductApiController> logger)
     {
-        _productRepository = productRepository;
+        _productRepo = productRepo;
+        _logger = logger;
     }
 
-    // Phân quyền cho chức năng lấy danh sách sản phẩm: người dùng đã đăng nhập (User hoặc Admin)
+    /// <summary>
+    /// Lấy toàn bộ danh sách sản phẩm (Yêu cầu đăng nhập: Role User hoặc Admin)
+    /// </summary>
     [HttpGet]
     [Authorize]
     public async Task<IActionResult> GetProducts()
     {
         try
         {
-            var products = await _productRepository.GetProductsAsync();
-            return Ok(products);
+            var productList = await _productRepo.GetProductsAsync();
+            return Ok(productList);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Internal server error: {ex.Message}");
+            _logger.LogError(ex, "Lỗi xảy ra khi lấy danh sách sản phẩm");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ nội bộ", detail = ex.Message });
         }
     }
 
-    [HttpGet("{id}")]
+    /// <summary>
+    /// Lấy thông tin chi tiết một sản phẩm theo ID (Yêu cầu đăng nhập)
+    /// </summary>
+    [HttpGet("{id:int}")]
     [Authorize]
     public async Task<IActionResult> GetProductById(int id)
     {
         try
         {
-            var product = await _productRepository.GetProductByIdAsync(id);
-            if (product == null)
-                return NotFound();
-            return Ok(product);
+            var foundProduct = await _productRepo.GetProductByIdAsync(id);
+            if (foundProduct is null)
+            {
+                return NotFound(new { message = $"Không tìm thấy sản phẩm với ID = {id}" });
+            }
+
+            return Ok(foundProduct);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Internal server error: {ex.Message}");
+            _logger.LogError(ex, "Lỗi xảy ra khi lấy chi tiết sản phẩm {Id}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ nội bộ", detail = ex.Message });
         }
     }
 
-    // Chỉ Admin mới có quyền thêm sản phẩm
+    /// <summary>
+    /// Thêm sản phẩm mới (Chỉ dành cho quyền Admin)
+    /// </summary>
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddProduct([FromBody] Product product)
     {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
         try
         {
-            await _productRepository.AddProductAsync(product);
+            await _productRepo.AddProductAsync(product);
             return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, product);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Internal server error: {ex.Message}");
+            _logger.LogError(ex, "Lỗi xảy ra khi thêm mới sản phẩm");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ nội bộ", detail = ex.Message });
         }
     }
 
-    // Chỉ Admin mới có quyền sửa sản phẩm
-    [HttpPut("{id}")]
+    /// <summary>
+    /// Cập nhật thông tin sản phẩm (Chỉ dành cho quyền Admin)
+    /// </summary>
+    [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateProduct(int id, [FromBody] Product product)
     {
+        if (id != product.Id)
+        {
+            return BadRequest(new { message = "ID sản phẩm trong đường dẫn không khớp với dữ liệu gửi lên" });
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
         try
         {
-            if (id != product.Id)
-                return BadRequest();
-            await _productRepository.UpdateProductAsync(product);
+            await _productRepo.UpdateProductAsync(product);
             return NoContent();
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Internal server error: {ex.Message}");
+            _logger.LogError(ex, "Lỗi xảy ra khi cập nhật sản phẩm {Id}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ nội bộ", detail = ex.Message });
         }
     }
 
-    // Chỉ Admin mới có quyền xóa sản phẩm
-    [HttpDelete("{id}")]
+    /// <summary>
+    /// Xóa sản phẩm khỏi hệ thống (Chỉ dành cho quyền Admin)
+    /// </summary>
+    [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
         try
         {
-            await _productRepository.DeleteProductAsync(id);
+            var existingProduct = await _productRepo.GetProductByIdAsync(id);
+            if (existingProduct is null)
+            {
+                return NotFound(new { message = $"Sản phẩm với ID = {id} không tồn tại" });
+            }
+
+            await _productRepo.DeleteProductAsync(id);
             return NoContent();
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Internal server error: {ex.Message}");
+            _logger.LogError(ex, "Lỗi xảy ra khi xóa sản phẩm {Id}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ nội bộ", detail = ex.Message });
         }
     }
 }
+

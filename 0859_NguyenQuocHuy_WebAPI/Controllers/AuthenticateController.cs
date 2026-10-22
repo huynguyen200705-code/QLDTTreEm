@@ -1,4 +1,4 @@
-﻿using _0859_NguyenQuocHuy_WebAPI.Models;
+using _0859_NguyenQuocHuy_WebAPI.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -14,106 +14,174 @@ public class AuthenticateController : ControllerBase
 {
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
-    private readonly IConfiguration _configuration;
+    private readonly IConfiguration _config;
+    private readonly ILogger<AuthenticateController> _logger;
 
     public AuthenticateController(
         UserManager<User> userManager,
         RoleManager<IdentityRole> roleManager,
-        IConfiguration configuration)
+        IConfiguration config,
+        ILogger<AuthenticateController> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
-        _configuration = configuration;
+        _config = config;
+        _logger = logger;
     }
 
+    /// <summary>
+    /// Đăng ký tài khoản người dùng mới kèm vai trò
+    /// </summary>
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegistrationModel model)
+    public async Task<IActionResult> Register([FromBody] RegistrationModel request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        var userExists = await _userManager.FindByNameAsync(model.Username);
-        if (userExists != null)
-            return StatusCode(StatusCodes.Status400BadRequest, new { status = false, message = "User already exists" });
-
-        var user = new User
+        if (!ModelState.IsValid)
         {
-            UserName = model.Username,
-            Email = model.Email,
-            Initials = model.Initials
+            return BadRequest(ModelState);
+        }
+
+        // Kiểm tra xem tên đăng nhập hoặc email đã tồn tại hay chưa
+        var accountByUsername = await _userManager.FindByNameAsync(request.Username);
+        if (accountByUsername is not null)
+        {
+            return StatusCode(StatusCodes.Status400BadRequest, new 
+            { 
+                status = false, 
+                message = "Tên đăng nhập đã tồn tại trong hệ thống." 
+            });
+        }
+
+        var accountByEmail = await _userManager.FindByEmailAsync(request.Email);
+        if (accountByEmail is not null)
+        {
+            return StatusCode(StatusCodes.Status400BadRequest, new 
+            { 
+                status = false, 
+                message = "Địa chỉ email đã được sử dụng." 
+            });
+        }
+
+        // Khởi tạo thực thể người dùng mới
+        var newUser = new User
+        {
+            UserName = request.Username.Trim(),
+            Email = request.Email.Trim(),
+            Initials = request.Initials?.Trim()
         };
 
-        var result = await _userManager.CreateAsync(user, model.Password);
-        if (!result.Succeeded)
+        var creationResult = await _userManager.CreateAsync(newUser, request.Password);
+        if (!creationResult.Succeeded)
         {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return StatusCode(StatusCodes.Status500InternalServerError, new { status = false, message = $"User creation failed: {errors}" });
+            var errorDetails = string.Join("; ", creationResult.Errors.Select(err => err.Description));
+            _logger.LogWarning("Tạo tài khoản thất bại cho {Username}: {Errors}", request.Username, errorDetails);
+
+            return StatusCode(StatusCodes.Status500InternalServerError, new 
+            { 
+                status = false, 
+                message = $"Đăng ký tài khoản không thành công: {errorDetails}" 
+            });
         }
 
-        // Gán Role nếu được chỉ định, mặc định là User
-        var roleToAssign = string.IsNullOrWhiteSpace(model.Role) ? "User" : model.Role;
-        if (!await _roleManager.RoleExistsAsync(roleToAssign))
+        // Gán Role cho tài khoản (mặc định là 'User')
+        var targetRole = string.IsNullOrWhiteSpace(request.Role) ? "User" : request.Role.Trim();
+        if (!await _roleManager.RoleExistsAsync(targetRole))
         {
-            await _roleManager.CreateAsync(new IdentityRole(roleToAssign));
+            await _roleManager.CreateAsync(new IdentityRole(targetRole));
         }
-        await _userManager.AddToRoleAsync(user, roleToAssign);
 
-        return Ok(new { status = true, message = "User created successfully" });
+        await _userManager.AddToRoleAsync(newUser, targetRole);
+
+        _logger.LogInformation("Người dùng {Username} đăng ký thành công với quyền {Role}", newUser.UserName, targetRole);
+        return Ok(new 
+        { 
+            status = true, 
+            message = "Tạo tài khoản người dùng thành công." 
+        });
     }
 
+    /// <summary>
+    /// Xác thực thông tin đăng nhập và cấp phát JWT Bearer Token
+    /// </summary>
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginModel model)
+    public async Task<IActionResult> Login([FromBody] LoginModel request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        var user = await _userManager.FindByNameAsync(model.Username);
-        if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
-            return Unauthorized(new { status = false, message = "Invalid username or password" });
-
-        var userRoles = await _userManager.GetRolesAsync(user);
-
-        var authClaims = new List<Claim>
+        if (!ModelState.IsValid)
         {
-            new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        foreach (var userRole in userRoles)
-        {
-            authClaims.Add(new Claim(ClaimTypes.Role, userRole));
+            return BadRequest(ModelState);
         }
 
-        var token = GenerateToken(authClaims);
-        var primaryRole = userRoles.FirstOrDefault() ?? "User";
+        // Tìm người dùng theo username
+        var appUser = await _userManager.FindByNameAsync(request.Username);
+        if (appUser is null || !await _userManager.CheckPasswordAsync(appUser, request.Password))
+        {
+            return Unauthorized(new 
+            { 
+                status = false, 
+                message = "Tài khoản hoặc mật khẩu không chính xác." 
+            });
+        }
+
+        // Lấy danh sách các vai trò đã được cấp
+        var rolesList = await _userManager.GetRolesAsync(appUser);
+
+        // Khởi tạo các Claims định danh cho Token
+        var tokenClaims = new List<Claim>
+        {
+            new(ClaimTypes.Name, appUser.UserName ?? string.Empty),
+            new(ClaimTypes.NameIdentifier, appUser.Id),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        if (!string.IsNullOrEmpty(appUser.Email))
+        {
+            tokenClaims.Add(new Claim(ClaimTypes.Email, appUser.Email));
+        }
+
+        foreach (var roleName in rolesList)
+        {
+            tokenClaims.Add(new Claim(ClaimTypes.Role, roleName));
+        }
+
+        var jwtToken = CreateJwtToken(tokenClaims);
+        var primaryRole = rolesList.FirstOrDefault() ?? "User";
+
+        _logger.LogInformation("Người dùng {Username} đăng nhập thành công", appUser.UserName);
 
         return Ok(new
         {
             status = true,
-            message = "Logged in successfully",
-            token = token,
+            message = "Đăng nhập thành công",
+            token = jwtToken,
             role = primaryRole,
-            username = user.UserName
+            username = appUser.UserName
         });
     }
 
-    private string GenerateToken(IEnumerable<Claim> claims)
+    /// <summary>
+    /// Trợ hàm ký và tạo chuỗi JWT Token
+    /// </summary>
+    private string CreateJwtToken(IEnumerable<Claim> claims)
     {
-        var jwtSettings = _configuration.GetSection("JWTKey");
-        var secret = jwtSettings["Secret"] ?? "AReallyLongSecretKeyForYourJWTTokenSigning123456!";
-        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        var jwtConfig = _config.GetSection("JWTKey");
+        var secretKey = jwtConfig["Secret"] ?? "AReallyLongSecretKeyForYourJWTTokenSigning123456!";
+        var symmetricKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
 
-        var expiryHours = Convert.ToDouble(jwtSettings["TokenExpiryTimeInHour"] ?? "24");
+        var expiryHours = double.TryParse(jwtConfig["TokenExpiryTimeInHour"], out var parsedHours) 
+            ? parsedHours 
+            : 24.0;
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddHours(expiryHours),
-            Issuer = jwtSettings["ValidIssuer"] ?? "YourIssuer",
-            Audience = jwtSettings["ValidAudience"] ?? "YourAudience",
-            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            Issuer = jwtConfig["ValidIssuer"] ?? "YourIssuer",
+            Audience = jwtConfig["ValidAudience"] ?? "YourAudience",
+            SigningCredentials = new SigningCredentials(symmetricKey, SecurityAlgorithms.HmacSha256Signature)
         };
 
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var token = tokenHandler.CreateToken(tokenDescriptor);
-        return tokenHandler.WriteToken(token);
+        var handler = new JwtSecurityTokenHandler();
+        var securityToken = handler.CreateToken(tokenDescriptor);
+        return handler.WriteToken(securityToken);
     }
 }
+

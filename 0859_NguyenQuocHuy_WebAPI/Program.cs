@@ -1,5 +1,6 @@
-﻿using _0859_NguyenQuocHuy_WebAPI.Models;
+using _0859_NguyenQuocHuy_WebAPI.Models;
 using _0859_NguyenQuocHuy_WebAPI.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,88 +9,101 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Cấu hình: Dùng SQL Server làm hệ quản trị CSDL cho ứng dụng
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// 1. Đăng ký CSDL SQL Server với DbContext
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? throw new InvalidOperationException("Chuỗi kết nối 'DefaultConnection' chưa được cấu hình.");
 
-// Cấu hình Identity
-builder.Services.AddIdentity<User, IdentityRole>(options =>
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.Password.RequireDigit = false;
-    options.Password.RequiredLength = 6;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireLowercase = false;
+    options.UseSqlServer(connectionString);
+});
+
+// 2. Cấu hình Identity quản lý tài khoản và phân quyền
+builder.Services.AddIdentity<User, IdentityRole>(cfg =>
+{
+    cfg.Password.RequireDigit = false;
+    cfg.Password.RequiredLength = 6;
+    cfg.Password.RequireNonAlphanumeric = false;
+    cfg.Password.RequireUppercase = false;
+    cfg.Password.RequireLowercase = false;
+    cfg.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Add services to the container.
+// 3. Đăng ký Controllers & Repositories
 builder.Services.AddControllers();
 builder.Services.AddScoped<IproductRepository, ProductRepository>();
 builder.Services.AddEndpointsApiExplorer();
 
-// Cấu hình Swagger hỗ trợ JWT Bearer Authorize
-builder.Services.AddSwaggerGen(options =>
+// 4. Cấu hình Swagger UI hỗ trợ thử nghiệm JWT Bearer
+builder.Services.AddSwaggerGen(c =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "0859_NguyenQuocHuy_WebAPI", Version = "v1" });
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "Hệ Thống API Quản Lý Thiết Bị Trẻ Em", 
+        Version = "v1",
+        Description = "ASP.NET Core Web API cung cấp các dịch vụ xác thực và dữ liệu"
+    });
+
+    var jwtSecurityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
+        Description = "Nhập mã Token theo định dạng: Bearer {token}",
+        In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
         Scheme = "Bearer",
         BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Nhập token vào đây (ví dụ: Bearer {token})"
-    });
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+        Reference = new OpenApiReference
         {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
+            Type = ReferenceType.SecurityScheme,
+            Id = JwtBearerDefaults.AuthenticationScheme
         }
-    });
-});
+    };
 
-// Configure CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(name: "MyAllowOrigins", policy =>
+    c.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, jwtSecurityScheme);
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        { jwtSecurityScheme, Array.Empty<string>() }
     });
 });
 
-// Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JWTKey");
-var secret = jwtSettings["Secret"] ?? "AReallyLongSecretKeyForYourJWTTokenSigning123456!";
-var key = Encoding.UTF8.GetBytes(secret);
+// 5. Cấu hình CORS mở quyền truy cập cho frontend
+const string AppCorsPolicy = "MyAllowOrigins";
+builder.Services.AddCors(corsOptions =>
+{
+    corsOptions.AddPolicy(AppCorsPolicy, policyBuilder =>
+    {
+        policyBuilder.AllowAnyOrigin()
+                     .AllowAnyHeader()
+                     .AllowAnyMethod();
+    });
+});
 
-builder.Services.AddAuthentication(options =>
+// 6. Cấu hình JWT Authentication & Authorization
+var jwtSection = builder.Configuration.GetSection("JWTKey");
+var jwtSecretKey = jwtSection["Secret"] ?? "AReallyLongSecretKeyForYourJWTTokenSigning123456!";
+var signingKeyBytes = Encoding.UTF8.GetBytes(jwtSecretKey);
+
+builder.Services.AddAuthentication(authOpts =>
 {
-    options.DefaultAuthenticateScheme = "Bearer";
-    options.DefaultChallengeScheme = "Bearer";
+    authOpts.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    authOpts.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer("Bearer", options =>
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, bearerOpts =>
 {
-    options.TokenValidationParameters = new TokenValidationParameters
+    bearerOpts.RequireHttpsMetadata = false;
+    bearerOpts.SaveToken = true;
+    bearerOpts.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["ValidIssuer"] ?? "YourIssuer",
-        ValidAudience = jwtSettings["ValidAudience"] ?? "YourAudience",
-        IssuerSigningKey = new SymmetricSecurityKey(key)
+        ValidIssuer = jwtSection["ValidIssuer"] ?? "YourIssuer",
+        ValidAudience = jwtSection["ValidAudience"] ?? "YourAudience",
+        IssuerSigningKey = new SymmetricSecurityKey(signingKeyBytes),
+        ClockSkew = TimeSpan.Zero
     };
 });
 
@@ -97,37 +111,47 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Tạo các Role trong ứng dụng (Admin, User)
-using (var scope = app.Services.CreateScope())
-{
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var roles = new[] { "Admin", "User" };
-    foreach (var role in roles)
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-        {
-            await roleManager.CreateAsync(new IdentityRole(role));
-        }
-    }
-}
+// 7. Tự động khởi tạo dữ liệu vai trò hệ thống (Admin, User)
+await InitializeSystemRolesAsync(app);
 
-// Middleware for production error handling
-if (!app.Environment.IsDevelopment())
+// 8. Cấu hình Pipeline xử lý HTTP Requests
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "QLDTTreEm API v1");
+    });
+}
+else
 {
     app.UseExceptionHandler("/error");
     app.UseHsts();
 }
-else
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
 app.UseHttpsRedirection();
-app.UseCors("MyAllowOrigins");
+app.UseCors(AppCorsPolicy);
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
 app.Run();
+
+// Hàm hỗ trợ khởi tạo các vai trò ban đầu
+static async Task InitializeSystemRolesAsync(WebApplication application)
+{
+    using var scope = application.Services.CreateScope();
+    var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    
+    var defaultRoles = new[] { "Admin", "User" };
+    foreach (var roleName in defaultRoles)
+    {
+        if (!await roleMgr.RoleExistsAsync(roleName))
+        {
+            await roleMgr.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+}
+

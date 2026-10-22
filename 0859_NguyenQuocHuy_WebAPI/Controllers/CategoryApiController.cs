@@ -1,4 +1,4 @@
-﻿using _0859_NguyenQuocHuy_WebAPI.Models;
+using _0859_NguyenQuocHuy_WebAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,74 +9,154 @@ namespace _0859_NguyenQuocHuy_WebAPI.Controllers;
 [ApiController]
 public class CategoryApiController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly ApplicationDbContext _dbContext;
+    private readonly ILogger<CategoryApiController> _logger;
 
-    public CategoryApiController(ApplicationDbContext context)
+    public CategoryApiController(
+        ApplicationDbContext dbContext,
+        ILogger<CategoryApiController> logger)
     {
-        _context = context;
+        _dbContext = dbContext;
+        _logger = logger;
     }
 
-    // GET: api/CategoryApi
+    /// <summary>
+    /// Lấy danh sách tất cả các danh mục cùng các sản phẩm thuộc danh mục
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetCategories()
     {
-        var categories = await _context.Categories.Include(c => c.Products).ToListAsync();
-        return Ok(categories);
+        try
+        {
+            var categories = await _dbContext.Categories
+                .AsNoTracking()
+                .Include(c => c.Products)
+                .ToListAsync();
+
+            return Ok(categories);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi xảy ra khi truy vấn danh sách danh mục");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi khi tải danh mục", error = ex.Message });
+        }
     }
 
-    // GET: api/CategoryApi/5
-    [HttpGet("{id}")]
+    /// <summary>
+    /// Xem chi tiết một danh mục theo mã ID
+    /// </summary>
+    [HttpGet("{id:int}")]
     public async Task<IActionResult> GetCategoryById(int id)
     {
-        var category = await _context.Categories.Include(c => c.Products).FirstOrDefaultAsync(c => c.Id == id);
-        if (category == null)
-            return NotFound();
-        return Ok(category);
+        try
+        {
+            var targetCategory = await _dbContext.Categories
+                .AsNoTracking()
+                .Include(c => c.Products)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (targetCategory is null)
+            {
+                return NotFound(new { message = $"Không tìm thấy danh mục mang ID = {id}" });
+            }
+
+            return Ok(targetCategory);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi lấy thông tin danh mục {Id}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi máy chủ", error = ex.Message });
+        }
     }
 
-    // POST: api/CategoryApi (Admin only)
+    /// <summary>
+    /// Tạo mới một danh mục (Yêu cầu vai trò Admin)
+    /// </summary>
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AddCategory([FromBody] Category category)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
 
-        _context.Categories.Add(category);
-        await _context.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetCategoryById), new { id = category.Id }, category);
+        try
+        {
+            await _dbContext.Categories.AddAsync(category);
+            await _dbContext.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetCategoryById), new { id = category.Id }, category);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi thêm danh mục mới");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Không thể thêm danh mục", error = ex.Message });
+        }
     }
 
-    // PUT: api/CategoryApi/5 (Admin only)
-    [HttpPut("{id}")]
+    /// <summary>
+    /// Chỉnh sửa danh mục hiện có (Yêu cầu vai trò Admin)
+    /// </summary>
+    [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateCategory(int id, [FromBody] Category category)
     {
-        if (id != category.Id) return BadRequest();
+        if (id != category.Id)
+        {
+            return BadRequest(new { message = "ID danh mục không trùng khớp" });
+        }
 
-        _context.Entry(category).State = EntityState.Modified;
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var isExist = await _dbContext.Categories.AnyAsync(c => c.Id == id);
+        if (!isExist)
+        {
+            return NotFound(new { message = $"Danh mục mang mã {id} không tồn tại" });
+        }
+
+        _dbContext.Entry(category).State = EntityState.Modified;
+
         try
         {
-            await _context.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
+            return NoContent();
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateConcurrencyException ex)
         {
-            if (!_context.Categories.Any(c => c.Id == id))
-                return NotFound();
-            throw;
+            _logger.LogError(ex, "Lỗi xung đột khi cập nhật danh mục {Id}", id);
+            return StatusCode(StatusCodes.Status409Conflict, new { message = "Dữ liệu đã bị thay đổi bởi phiên khác" });
         }
-        return NoContent();
     }
 
-    // DELETE: api/CategoryApi/5 (Admin only - xóa danh mục thì các sản phẩm không thuộc danh mục nào cả)
-    [HttpDelete("{id}")]
+    /// <summary>
+    /// Xóa một danh mục (Yêu cầu Admin - sản phẩm thuộc danh mục sẽ chuyển sang CategoryId = null)
+    /// </summary>
+    [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
-        var category = await _context.Categories.FindAsync(id);
-        if (category == null) return NotFound();
+        var categoryToDelete = await _dbContext.Categories.FindAsync(id);
+        if (categoryToDelete is null)
+        {
+            return NotFound(new { message = $"Không tìm thấy danh mục {id} để xóa" });
+        }
 
-        _context.Categories.Remove(category);
-        await _context.SaveChangesAsync();
-        return NoContent();
+        try
+        {
+            _dbContext.Categories.Remove(categoryToDelete);
+            await _dbContext.SaveChangesAsync();
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi xóa danh mục {Id}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Không thể xóa danh mục", error = ex.Message });
+        }
     }
 }
+
